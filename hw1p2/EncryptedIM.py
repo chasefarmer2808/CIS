@@ -11,7 +11,7 @@ import hmac # for generating a hashed MAC
 
 from collections import deque
 from Crypto.Cipher import AES
-from Crypto import Random
+#from Crypto import Random
 
 # GLOBAL VARIABLES
 DEFAULT_PORT = 9999
@@ -173,7 +173,8 @@ def encrypt(confkey, authkey, msg):
 
     msg = pad(msg, AES.block_size)
 
-    iv = Random.new().read(AES.block_size)
+    #iv = Random.new().read(AES.block_size)
+    iv = os.urandom(AES.block_size)
     cipher = AES.new(prime_conf_key, AES.MODE_CBC, iv)
     msg = cipher.encrypt(msg.encode())
 
