@@ -1,0 +1,19 @@
+For this assignment, I choose do structure the message that gets sent as the
+concatination of the IV, HMAC, and ciphertext.  The diagram below shows how the
+message is structured.
+
+| IV | HMAC | ciphertext |
+
+
+The IV is 16 bytes, and will be the first 16 bytes of the message.  The HMAC will
+be the next 20 bytes.  Finally, the ciphertext is the only thing of variable length,
+so I put it at the end so we can just get the rest from the end of HMAC on.
+Unpacking of the full message is done by splicing it on these boundaries.
+
+For padding, I knew that I padding with a hex value that represented the pad size
+would not work in all cases, because it would be hard to tell if the last byte
+is part of the message or pad.  So instead, I padded with null characters, starting
+with 0x08, which represents backspace.  That way, unpadding is achieved by simply
+decrementing a pointer from the end of the message, until the 0x08 is reached.
+Because 0x08 is backspace, there should be no chance a user is able to make it
+the last character of the message by typing on their keyboard.
