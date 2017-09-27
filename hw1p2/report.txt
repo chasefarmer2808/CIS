@@ -1,9 +1,18 @@
+Python version: Python 2
+
 For this assignment, I choose do structure the message that gets sent as the
 concatination of the IV, HMAC, and ciphertext.  The diagram below shows how the
 message is structured.
 
 | IV | HMAC | ciphertext |
 
+The message is constructed as follows.  First the conf key and auth key are each
+hashed using sha1.  The new keys, prime_conf_key and prime_auth_key, are initialed
+as the first 16 bytes of the hash digest.  An hmac is then contructed using the
+prime_auth_key and the message.  The message is then padded to make sure it lies
+on a 16 byte boundary.  This is because AES128 has a block size of 16 bytes.
+The IV is constructed next, and after that, the full message is ready to be
+constructed and sent.
 
 The IV is 16 bytes, and will be the first 16 bytes of the message.  The HMAC will
 be the next 20 bytes.  Finally, the ciphertext is the only thing of variable length,
@@ -17,3 +26,9 @@ with 0x08, which represents backspace.  That way, unpadding is achieved by simpl
 decrementing a pointer from the end of the message, until the 0x08 is reached.
 Because 0x08 is backspace, there should be no chance a user is able to make it
 the last character of the message by typing on their keyboard.
+
+When a message is received, it is first "unpacked".  This is where the IV, HMAC,
+and ciphertext are spliced from the full message.  The plaintext is made by
+decrypting the ciphertext, and then unpadding that result.  Finally, the
+message is authorized by creating an HMAC with the auth key, which is then
+compared to the hmac sent to the receiver.

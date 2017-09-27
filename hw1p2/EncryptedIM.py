@@ -173,7 +173,6 @@ def encrypt(confkey, authkey, msg):
 
     msg = pad(msg, AES.block_size)
 
-    #iv = Random.new().read(AES.block_size)
     iv = os.urandom(AES.block_size)
     cipher = AES.new(prime_conf_key, AES.MODE_CBC, iv)
     msg = cipher.encrypt(msg.encode())
