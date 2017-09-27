@@ -172,7 +172,6 @@ def encrypt(confkey, authkey, msg):
     my_hmac = make_hmac(prime_auth_key, msg)
 
     msg = pad(msg, AES.block_size)
-
     iv = os.urandom(AES.block_size)
     cipher = AES.new(prime_conf_key, AES.MODE_CBC, iv)
     msg = cipher.encrypt(msg.encode())
@@ -185,6 +184,7 @@ def encrypt(confkey, authkey, msg):
 def main():
     global s
     datalen = 1024
+    total_datalen = datalen + 36
     args = parse_arguments()
 
     init(args)
@@ -204,8 +204,7 @@ def main():
         readable, writeable, exceptional = select.select(inputs, outputs, inputs)
 
         if s in readable:
-            data = s.recv(datalen)
-
+            data = s.recv(total_datalen)
             if ((data is not None) and (len(data) > 0)):
 
                 recv_iv, recv_hmac, ciphertext = decompile_msg(data)
@@ -221,7 +220,7 @@ def main():
                 s = None
 
         if sys.stdin in readable: # input from the user
-            data = sys.stdin.readline(1024)
+            data = sys.stdin.readline(datalen)
 
             if (len(data) > 0):
                 output_buffer.append(data)
@@ -235,15 +234,13 @@ def main():
         if s in writeable:
             if (len(output_buffer) > 0):
                 data = output_buffer.popleft()
-
                 full_msg = encrypt(args.conf_key, args.auth_key, data)
 
-                bytes_sent = len(data)
-                s.send(full_msg)
-
+                #bytes_sent = len(data)
+                bytes_sent = s.send(full_msg)
                 # if not all the chars were sent, put the unsend chars back in the buffer
-                if (bytes_sent < len(data)):
-                    output_buffer.appendleft(data[bytesSent:])
+                if (bytes_sent < len(full_msg)):
+                    output_buffer.appendleft(full_msg[bytes_sent:])
 
         if s in exceptional:
             s.shutdown(socket.SHUT_RDWR)
