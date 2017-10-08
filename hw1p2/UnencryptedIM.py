@@ -12,10 +12,32 @@ import signal #To kill the programs nicely
 import random
 
 from collections import deque
+from Crypto.Random import random
+
+"""
+function secure_generate_random_integer(low, high)
+input: low -> lower bound for range
+    high -> upper bound for range
+output: the a secure, random integer value used for DH
+"""
+def secure_generate_random_integer(low, high):
+  return random.randint(low, high)
 
 ############
 #GLOBAL VARS
 DEFAULT_PORT = 9999
+SECRET_EXP = secure_generate_random_integer(1, 1000)
+G = 2
+P = int("""0x00cc81ea8157352a9e9a318aac4e33
+    ffba80fc8da3373fb44895109e4c3f
+    f6cedcc55c02228fccbd551a504feb
+    4346d2aef47053311ceaba95f6c540
+    b967b9409e9f0502e598cfc71327c5
+    a455e2e807bede1e0b7d23fbea054b
+    951ca964eaecae7ba842ba1fc6818c
+    453bf19eb9c5c86e723e69a210d4b7
+    2561cab97b3fb3060b""".replace("\n", "").replace(" ", ""), 0)
+
 s = None
 server_s = None
 logger = logging.getLogger('main')
@@ -28,7 +50,7 @@ def parse_arguments():
     help = 'Host to connect to')
   parser.add_argument('-s', dest='server', action='store_true',
     help = 'Run as server (on port 9999)')
-  parser.add_argument('-p', dest='port', metavar='PORT', type=int, 
+  parser.add_argument('-p', dest='port', metavar='PORT', type=int,
     default = DEFAULT_PORT,
     help = 'For testing purposes - allows use of different port')
 
@@ -50,13 +72,33 @@ def sigint_handler(signal, frame):
 
   quit()
 
+"""
+function compute_AB(exp)
+input: exp -> exponent in the equation
+output: A or B depending on client or server
+"""
+def compute_AB(exp):
+  global G
+  global P
+  return (G**exp) % P
+
+"""
+function compute_s(base, exp)
+input: base -> base value of the equation
+output: s -> shared secret number
+"""
+def compute_s(base, exp):
+  global G
+  global P
+  return (base**exp) % P
+
 def init():
   global s
   args = parse_arguments()
 
   logging.basicConfig()
   logger.setLevel(logging.CRITICAL)
-  
+
   #Catch the kill signal to close the socket gracefully
   signal.signal(signal.SIGINT, sigint_handler)
 
@@ -66,12 +108,14 @@ def init():
 
   if args.connect is not None and args.server is not False:
     print_how_to()
-    quit() 
+    quit()
 
   if args.connect is not None:
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     logger.debug('Connecting to ' + args.connect + ' ' + str(args.port))
     s.connect((args.connect, args.port))
+    do_DH_exchange(False)
+
 
   if args.server is not False:
     global server_s
@@ -81,19 +125,50 @@ def init():
     s, remote_addr = server_s.accept()
     server_s.close()
     logger.debug("Connection received from " + str(remote_addr))
+    do_DH_exchange(True)
+
+
+def do_DH_exchange(is_server):
+    global s
+    global SECRET_EXP
+    print(SECRET_EXP)
+    data = ""
+    shared_num = compute_AB(SECRET_EXP)
+
+    if is_server:
+        s.send(str(shared_num))
+
+        while True:
+            readable, writeable, exceptional = select.select([s], [s], [s])
+
+            if s in readable:
+                data = s.recv(1024)
+                break
+    else:
+        while True:
+            readable, writeable, exceptional = select.select([s], [s], [s])
+
+            if s in readable:
+                data = s.recv(1024)
+                break
+
+        s.send(str(shared_num))
+
+    shared_secret = compute_s(int(data), SECRET_EXP)
+    print(shared_secret)
 
 def main():
   global s
   datalen=64
-  
+
   init()
-  
+
   inputs = [sys.stdin, s]
   outputs = [s]
 
   output_buffer = deque()
 
-  while s is not None: 
+  while s is not None:
     #Prevents select from returning the writeable socket when there's nothing to write
     if (len(output_buffer) > 0):
       outputs = [s]

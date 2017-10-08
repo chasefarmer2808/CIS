@@ -10,11 +10,24 @@ import hashlib # for SHA1 hashing of keys
 
 from collections import deque
 from Crypto.Cipher import AES
-from Crypto import Random
+from Crypto.Random import random
+
+"""
+function secure_generate_random_integer(low, high)
+input: low -> lower bound for range
+    high -> upper bound for range
+output: the a secure, random integer value used for DH
+"""
+def secure_generate_random_integer(low, high):
+  return random.randint(low, high)
 
 # GLOBAL VARIABLES
 DEFAULT_PORT = 9999
 AES_BLOCK_SIZE_BYTES = 16
+SECRET_EXP = secure_generate_random_integer(1, 1000)
+G = 2
+P = 0x00cc81ea8157352a9e9a318aac4e33ffba80fc8da3373fb44895109e4c3ff6cedcc55c02228fccbd551a504feb4346d2aef47053311ceaba95f6c540b967b9409e9f0502e598cfc71327c5a455e2e807bede1e0b7d23fbea054b951ca964eaecae7ba842ba1fc6818c453bf19eb9c5c86e723e69a210d4b72561cab97b3fb3060b
+
 logger = logging.getLogger('main') # initialize the logger
 s = None
 server_s = None
@@ -91,6 +104,7 @@ def init():
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         logger.debug('Connecting to ' + args.connect + ' ' + str(args.port))
         s.connect((args.connect, args.port))
+        do_DH_exchange(is_server=False)
 
     if args.server is not False:
         global server_s
@@ -100,6 +114,27 @@ def init():
         s, remote_addr = server_s.accept()
         server_s.close()
         logger.debug('Connection reveived from ' + str(remote_addr))
+        do_DH_exchange(is_server=True)
+
+"""
+function compute_AB(exp)
+input: exp -> exponent in the equation
+output: A or B depending on client or server
+"""
+def compute_AB(exp):
+    global G
+    global P
+    return (G**exp) % P
+
+"""
+function compute_s(base, exp)
+input: base -> base value of the equation
+output: s -> shared secret number
+"""
+def compute_s(base, exp):
+    global G
+    global P
+    return (base**exp) % P
 
 """
 Function pad(msg, block_size)
@@ -154,6 +189,10 @@ def compile_msg(iv, hmac, msg):
     return iv + hmac + msg
 
 def make_special_key(key):
+
+    if (type(key) is int): # DH support
+        key = str(key)
+
     res = hashlib.sha1(key).digest()
     return res[0:16]
 
@@ -177,6 +216,33 @@ def decrypt(confkey, msg, iv):
     plaintext = unpad(plaintext)
 
     return plaintext
+
+def do_DH_exchange(is_server):
+    global s
+    global SECRET_EXP
+
+    shared_num = compute_AB(SECRET_EXP)
+
+    if is_server:
+        s.send(str(shared_num))
+
+        while True:
+            readable, writeable, exceptional = select.select([s], [s], [s])
+
+            if s in readable:
+                data = s.recv(64)
+                print(data)
+                break
+    else:
+        while True:
+            readable, writeable, exceptional = select.select([s], [s], [s])
+
+            if s in readable:
+                data = s.recv(64)
+                print(data)
+                break
+
+        s.send(str(shared_num))
 
 def main():
     global s
