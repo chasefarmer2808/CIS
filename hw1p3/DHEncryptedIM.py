@@ -26,7 +26,16 @@ DEFAULT_PORT = 9999
 AES_BLOCK_SIZE_BYTES = 16
 SECRET_EXP = secure_generate_random_integer(1, 1000)
 G = 2
-P = 0x00cc81ea8157352a9e9a318aac4e33ffba80fc8da3373fb44895109e4c3ff6cedcc55c02228fccbd551a504feb4346d2aef47053311ceaba95f6c540b967b9409e9f0502e598cfc71327c5a455e2e807bede1e0b7d23fbea054b951ca964eaecae7ba842ba1fc6818c453bf19eb9c5c86e723e69a210d4b72561cab97b3fb3060b
+P = int("""0x00cc81ea8157352a9e9a318aac4e33
+    ffba80fc8da3373fb44895109e4c3f
+    f6cedcc55c02228fccbd551a504feb
+    4346d2aef47053311ceaba95f6c540
+    b967b9409e9f0502e598cfc71327c5
+    a455e2e807bede1e0b7d23fbea054b
+    951ca964eaecae7ba842ba1fc6818c
+    453bf19eb9c5c86e723e69a210d4b7
+    2561cab97b3fb3060b""".replace("\n", "").replace(" ", ""), 0)
+SHARED_SECRET = 0
 
 logger = logging.getLogger('main') # initialize the logger
 s = None
@@ -93,10 +102,6 @@ def init():
     signal.signal(signal.SIGINT, sigint_handler)
 
     if args.connect is None and args.server is False:
-        print_how_to()
-        quit()
-
-    if args.conf_key is None or args.auth_key is None:
         print_how_to()
         quit()
 
@@ -185,8 +190,8 @@ def decompile_msg(msg):
 
     return (iv, ciphertext)
 
-def compile_msg(iv, hmac, msg):
-    return iv + hmac + msg
+def compile_msg(iv, msg):
+    return iv + msg
 
 def make_special_key(key):
 
@@ -220,7 +225,7 @@ def decrypt(confkey, msg, iv):
 def do_DH_exchange(is_server):
     global s
     global SECRET_EXP
-
+    data = ""
     shared_num = compute_AB(SECRET_EXP)
 
     if is_server:
@@ -230,24 +235,24 @@ def do_DH_exchange(is_server):
             readable, writeable, exceptional = select.select([s], [s], [s])
 
             if s in readable:
-                data = s.recv(64)
-                print(data)
+                data = s.recv(1024)
                 break
     else:
         while True:
             readable, writeable, exceptional = select.select([s], [s], [s])
 
             if s in readable:
-                data = s.recv(64)
-                print(data)
+                data = s.recv(1024)
                 break
 
         s.send(str(shared_num))
 
+    SHARED_SECRET = compute_s(int(data), SECRET_EXP)
+
 def main():
     global s
     datalen = 1024
-    total_datalen = datalen + 36
+    total_datalen = datalen + 16
 
     init()
 
@@ -270,8 +275,8 @@ def main():
             if ((data is not None) and (len(data) > 0)):
 
                 recv_iv, ciphertext = decompile_msg(data)
-                # TODO: change args.conf_key to the hash of the DH key
-                data = decrypt(args.conf_key, ciphertext, recv_iv)
+
+                data = decrypt(SHARED_SECRET, ciphertext, recv_iv)
 
                 sys.stdout.write(data)
             else:
@@ -294,8 +299,8 @@ def main():
         if s in writeable:
             if (len(output_buffer) > 0):
                 data = output_buffer.popleft()
-                # TODO: change args.conf_key to hash of DH key
-                full_msg = encrypt(args.conf_key, data)
+
+                full_msg = encrypt(SHARED_SECRET, data)
 
                 #bytes_sent = len(data)
                 bytes_sent = s.send(full_msg)
